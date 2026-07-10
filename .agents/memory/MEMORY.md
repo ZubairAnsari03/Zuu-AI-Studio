@@ -1,0 +1,1 @@
+- [Zuu Studio architecture](zuu-studio-arch.md) — custom JWT auth, modular provider system, Orval codegen; key gotchas on hook usage and sub-path exports

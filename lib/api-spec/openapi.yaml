@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Zuu AI Video Studio API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: videos
+    description: Video generation
+  - name: characters
+    description: Character profiles
+  - name: prompts
+    description: Prompt management
+  - name: providers
+    description: API providers
+  - name: credits
+    description: Credits and billing
+  - name: admin
+    description: Admin panel
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +38,593 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  # ── Videos ────────────────────────────────────────────────────────────────
+  /videos:
+    get:
+      operationId: listVideos
+      tags: [videos]
+      summary: List user's video generations
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: favourite
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of videos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoListResponse"
+
+    post:
+      operationId: generateVideo
+      tags: [videos]
+      summary: Start a video generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VideoGenerationInput"
+      responses:
+        "201":
+          description: Generation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoGeneration"
+        "400":
+          description: Validation or content error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "402":
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /videos/{id}:
+    get:
+      operationId: getVideo
+      tags: [videos]
+      summary: Get a video generation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Video generation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoGeneration"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: deleteVideo
+      tags: [videos]
+      summary: Delete a video generation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /videos/{id}/status:
+    get:
+      operationId: getVideoStatus
+      tags: [videos]
+      summary: Poll video generation status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoStatusResponse"
+
+  /videos/{id}/regenerate:
+    post:
+      operationId: regenerateVideo
+      tags: [videos]
+      summary: Regenerate a video from its settings
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: New generation started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoGeneration"
+
+  /videos/{id}/favourite:
+    post:
+      operationId: toggleFavourite
+      tags: [videos]
+      summary: Toggle favourite status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoGeneration"
+
+  /videos/stats:
+    get:
+      operationId: getVideoStats
+      tags: [videos]
+      summary: Get summary stats for current user
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoStatsResponse"
+
+  # ── Prompts ───────────────────────────────────────────────────────────────
+  /prompts/enhance:
+    post:
+      operationId: enhancePrompt
+      tags: [prompts]
+      summary: Enhance a prompt with AI or rule-based system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromptEnhanceInput"
+      responses:
+        "200":
+          description: Enhanced prompt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptEnhanceResponse"
+
+  /prompts:
+    get:
+      operationId: listSavedPrompts
+      tags: [prompts]
+      summary: List saved prompts
+      responses:
+        "200":
+          description: List of saved prompts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SavedPrompt"
+
+    post:
+      operationId: savePrompt
+      tags: [prompts]
+      summary: Save a prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SavedPromptInput"
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SavedPrompt"
+
+  /prompts/{id}:
+    delete:
+      operationId: deletePrompt
+      tags: [prompts]
+      summary: Delete a saved prompt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ── Characters ────────────────────────────────────────────────────────────
+  /characters:
+    get:
+      operationId: listCharacters
+      tags: [characters]
+      summary: List character profiles
+      responses:
+        "200":
+          description: List of characters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CharacterProfile"
+
+    post:
+      operationId: createCharacter
+      tags: [characters]
+      summary: Create a character profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterProfile"
+
+  /characters/{id}:
+    get:
+      operationId: getCharacter
+      tags: [characters]
+      summary: Get a character profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Character
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterProfile"
+
+    put:
+      operationId: updateCharacter
+      tags: [characters]
+      summary: Update a character profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterProfile"
+
+    delete:
+      operationId: deleteCharacter
+      tags: [characters]
+      summary: Delete a character profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  # ── Providers ─────────────────────────────────────────────────────────────
+  /providers:
+    get:
+      operationId: listProviders
+      tags: [providers]
+      summary: List available video providers
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderInfo"
+
+  # ── Credits ───────────────────────────────────────────────────────────────
+  /credits:
+    get:
+      operationId: getCredits
+      tags: [credits]
+      summary: Get user credit balance and history
+      responses:
+        "200":
+          description: Credits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreditsResponse"
+
+  # ── Admin ─────────────────────────────────────────────────────────────────
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get admin statistics
+      responses:
+        "200":
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatsResponse"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin)
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUsersResponse"
+
+  /admin/users/{id}/credits:
+    post:
+      operationId: adjustUserCredits
+      tags: [admin]
+      summary: Adjust user credits
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditAdjustInput"
+      responses:
+        "200":
+          description: Adjusted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/jobs:
+    get:
+      operationId: listAdminJobs
+      tags: [admin]
+      summary: List generation jobs (admin)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Jobs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminJobsResponse"
+
+  /admin/providers:
+    patch:
+      operationId: updateProviderSettings
+      tags: [admin]
+      summary: Enable or disable a provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderSettingUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +632,593 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    # ── Auth ─────────────────────────────────────────────────────────────
+    RegisterInput:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, email, name, role, credits, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+        credits:
+          type: integer
+        avatarUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    ProfileUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        avatarUrl:
+          type: ["string", "null"]
+
+    # ── Videos ───────────────────────────────────────────────────────────
+    VideoGenerationInput:
+      type: object
+      required: [prompt, style, aspectRatio, duration]
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+        enhancedPrompt:
+          type: ["string", "null"]
+        negativePrompt:
+          type: ["string", "null"]
+        style:
+          type: string
+        aspectRatio:
+          type: string
+          enum: ["9:16", "16:9", "1:1", "4:5"]
+        duration:
+          type: integer
+          enum: [5, 10, 15, 24, 30, 60]
+        quality:
+          type: string
+          enum: [standard, hd, full_hd, 4k]
+          default: standard
+        cameraMovement:
+          type: ["string", "null"]
+        lighting:
+          type: ["string", "null"]
+        motionStrength:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+        seed:
+          type: ["integer", "null"]
+        provider:
+          type: string
+          default: mock
+        characterProfileId:
+          type: ["integer", "null"]
+        referenceImageUrl:
+          type: ["string", "null"]
+        scenes:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/SceneInput"
+
+    SceneInput:
+      type: object
+      required: [sceneNumber, description, duration]
+      properties:
+        sceneNumber:
+          type: integer
+        description:
+          type: string
+        characterAction:
+          type: ["string", "null"]
+        cameraMovement:
+          type: ["string", "null"]
+        duration:
+          type: integer
+        environment:
+          type: ["string", "null"]
+        dialogue:
+          type: ["string", "null"]
+        soundEffect:
+          type: ["string", "null"]
+        musicMood:
+          type: ["string", "null"]
+
+    VideoGeneration:
+      type: object
+      required: [id, userId, prompt, style, aspectRatio, duration, quality, status, provider, isFavourite, creditsUsed, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        prompt:
+          type: string
+        enhancedPrompt:
+          type: ["string", "null"]
+        negativePrompt:
+          type: ["string", "null"]
+        style:
+          type: string
+        aspectRatio:
+          type: string
+        duration:
+          type: integer
+        quality:
+          type: string
+        cameraMovement:
+          type: ["string", "null"]
+        lighting:
+          type: ["string", "null"]
+        motionStrength:
+          type: string
+        seed:
+          type: ["integer", "null"]
+        provider:
+          type: string
+        providerJobId:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [draft, queued, processing, completed, failed, cancelled]
+        progressMessage:
+          type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        referenceImageUrl:
+          type: ["string", "null"]
+        characterProfileId:
+          type: ["integer", "null"]
+        isFavourite:
+          type: boolean
+        creditsUsed:
+          type: integer
+        errorMessage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    VideoListResponse:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoGeneration"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    VideoStatusResponse:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: integer
+        status:
+          type: string
+          enum: [draft, queued, processing, completed, failed, cancelled]
+        progressMessage:
+          type: ["string", "null"]
+        videoUrl:
+          type: ["string", "null"]
+        thumbnailUrl:
+          type: ["string", "null"]
+        errorMessage:
+          type: ["string", "null"]
+
+    VideoStatsResponse:
+      type: object
+      required: [total, completed, processing, failed, creditsUsed, favourites]
+      properties:
+        total:
+          type: integer
+        completed:
+          type: integer
+        processing:
+          type: integer
+        failed:
+          type: integer
+        creditsUsed:
+          type: integer
+        favourites:
+          type: integer
+
+    # ── Prompts ──────────────────────────────────────────────────────────
+    PromptEnhanceInput:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+        style:
+          type: ["string", "null"]
+        aspectRatio:
+          type: ["string", "null"]
+        cameraMovement:
+          type: ["string", "null"]
+        lighting:
+          type: ["string", "null"]
+
+    PromptEnhanceResponse:
+      type: object
+      required: [enhancedPrompt, negativePrompt]
+      properties:
+        enhancedPrompt:
+          type: string
+        negativePrompt:
+          type: string
+
+    SavedPrompt:
+      type: object
+      required: [id, userId, title, prompt, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        title:
+          type: string
+        prompt:
+          type: string
+        enhancedPrompt:
+          type: ["string", "null"]
+        style:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    SavedPromptInput:
+      type: object
+      required: [title, prompt]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        prompt:
+          type: string
+          minLength: 1
+        enhancedPrompt:
+          type: ["string", "null"]
+        style:
+          type: ["string", "null"]
+
+    # ── Characters ───────────────────────────────────────────────────────
+    CharacterProfile:
+      type: object
+      required: [id, userId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        name:
+          type: string
+        age:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        faceDescription:
+          type: ["string", "null"]
+        hair:
+          type: ["string", "null"]
+        clothes:
+          type: ["string", "null"]
+        bodyType:
+          type: ["string", "null"]
+        personality:
+          type: ["string", "null"]
+        animalType:
+          type: ["string", "null"]
+        cartoonStyle:
+          type: ["string", "null"]
+        referenceImageUrl:
+          type: ["string", "null"]
+        consistencyNotes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CharacterInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        age:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        faceDescription:
+          type: ["string", "null"]
+        hair:
+          type: ["string", "null"]
+        clothes:
+          type: ["string", "null"]
+        bodyType:
+          type: ["string", "null"]
+        personality:
+          type: ["string", "null"]
+        animalType:
+          type: ["string", "null"]
+        cartoonStyle:
+          type: ["string", "null"]
+        referenceImageUrl:
+          type: ["string", "null"]
+        consistencyNotes:
+          type: ["string", "null"]
+
+    CharacterUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        age:
+          type: ["string", "null"]
+        gender:
+          type: ["string", "null"]
+        faceDescription:
+          type: ["string", "null"]
+        hair:
+          type: ["string", "null"]
+        clothes:
+          type: ["string", "null"]
+        bodyType:
+          type: ["string", "null"]
+        personality:
+          type: ["string", "null"]
+        animalType:
+          type: ["string", "null"]
+        cartoonStyle:
+          type: ["string", "null"]
+        referenceImageUrl:
+          type: ["string", "null"]
+        consistencyNotes:
+          type: ["string", "null"]
+
+    # ── Providers ────────────────────────────────────────────────────────
+    ProviderInfo:
+      type: object
+      required: [id, name, enabled, supportsImageToVideo, supportedDurations, supportedAspectRatios, isMock]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        enabled:
+          type: boolean
+        supportsImageToVideo:
+          type: boolean
+        supportedDurations:
+          type: array
+          items:
+            type: integer
+        supportedAspectRatios:
+          type: array
+          items:
+            type: string
+        isMock:
+          type: boolean
+        description:
+          type: ["string", "null"]
+
+    # ── Credits ──────────────────────────────────────────────────────────
+    CreditsResponse:
+      type: object
+      required: [balance, transactions]
+      properties:
+        balance:
+          type: integer
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreditTransaction"
+
+    CreditTransaction:
+      type: object
+      required: [id, amount, type, description, createdAt]
+      properties:
+        id:
+          type: integer
+        amount:
+          type: integer
+        type:
+          type: string
+          enum: [credit, debit]
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ── Admin ─────────────────────────────────────────────────────────────
+    AdminStatsResponse:
+      type: object
+      required: [totalUsers, totalGenerations, completedGenerations, failedGenerations, activeGenerations, totalCreditsUsed]
+      properties:
+        totalUsers:
+          type: integer
+        totalGenerations:
+          type: integer
+        completedGenerations:
+          type: integer
+        failedGenerations:
+          type: integer
+        activeGenerations:
+          type: integer
+        totalCreditsUsed:
+          type: integer
+        generationsByProvider:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProviderStat"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminActivity"
+
+    ProviderStat:
+      type: object
+      required: [provider, count]
+      properties:
+        provider:
+          type: string
+        count:
+          type: integer
+
+    AdminActivity:
+      type: object
+      required: [id, userId, userEmail, status, provider, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        userEmail:
+          type: string
+        status:
+          type: string
+        provider:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminUsersResponse:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [id, email, name, role, credits, totalGenerations, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        credits:
+          type: integer
+        totalGenerations:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminJobsResponse:
+      type: object
+      required: [items, total, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/VideoGeneration"
+        total:
+          type: integer
+        page:
+          type: integer
+
+    CreditAdjustInput:
+      type: object
+      required: [amount, description]
+      properties:
+        amount:
+          type: integer
+        description:
+          type: string
+
+    ProviderSettingUpdate:
+      type: object
+      required: [providerId, enabled]
+      properties:
+        providerId:
+          type: string
+        enabled:
+          type: boolean
