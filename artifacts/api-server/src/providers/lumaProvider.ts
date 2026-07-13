@@ -7,12 +7,52 @@ import type {
 
 /**
  * Luma Dream Machine provider adapter.
- * Set LUMA_API_KEY environment variable to enable.
+ * Set LUMA_API_KEY in Replit Secrets to enable.
  *
- * TODO: Fill in endpoint details from Luma API docs.
  * Docs: https://lumalabs.ai/dream-machine/api/docs
  */
 const API_BASE = "https://api.lumalabs.ai/dream-machine/v1alpha";
+
+type LumaState = "queued" | "dreaming" | "completed" | "failed";
+
+type LumaGeneration = {
+  id: string;
+  state: LumaState;
+  failure_reason?: string;
+  assets?: {
+    video?: string;
+    image?: string;
+  };
+};
+
+type LumaCreateResponse = {
+  id: string;
+  state: LumaState;
+  failure_reason?: string;
+};
+
+function lumaHeaders(apiKey: string) {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+}
+
+/** Luma accepts specific aspect ratio strings. */
+function mapAspectRatio(ar: string): string {
+  const map: Record<string, string> = {
+    "16:9":  "16:9",
+    "9:16":  "9:16",
+    "1:1":   "1:1",
+    "4:3":   "4:3",
+    "3:4":   "3:4",
+    "21:9":  "21:9",
+    "9:21":  "9:21",
+    "4:5":   "4:5",
+  };
+  return map[ar] ?? "16:9";
+}
 
 export const lumaProvider: VideoProvider = {
   id: "luma",
@@ -20,73 +60,91 @@ export const lumaProvider: VideoProvider = {
   isMock: false,
   supportsImageToVideo: true,
   supportedDurations: [5],
-  supportedAspectRatios: ["16:9", "9:16", "4:3", "3:4", "21:9", "9:21"],
-  description: "Photorealistic video generation by Luma Dream Machine.",
+  supportedAspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "9:21"],
+  description:
+    "Photorealistic video generation by Luma AI's Dream Machine — stunning motion and lighting.",
 
-  async generateVideo(
-    input: VideoGenerationInput,
-  ): Promise<GenerationResult> {
+  async generateVideo(input: VideoGenerationInput): Promise<GenerationResult> {
     const apiKey = process.env.LUMA_API_KEY;
     if (!apiKey) throw new Error("LUMA_API_KEY not set");
 
-    // TODO: Adjust to actual Luma request body schema
+    const prompt = input.enhancedPrompt ?? input.prompt;
+    const aspect_ratio = mapAspectRatio(input.aspectRatio);
+
     const body: Record<string, unknown> = {
-      prompt: input.enhancedPrompt ?? input.prompt,
-      aspect_ratio: input.aspectRatio,
+      prompt,
+      aspect_ratio,
       loop: false,
     };
 
+    // Add keyframe for image-to-video
     if (input.referenceImageUrl) {
       body.keyframes = {
-        frame0: { type: "image", url: input.referenceImageUrl },
+        frame0: {
+          type: "image",
+          url: input.referenceImageUrl,
+        },
       };
     }
 
-    const response = await fetch(`${API_BASE}/generations/video`, {
+    const response = await fetch(`${API_BASE}/generations`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: lumaHeaders(apiKey),
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`Luma API error: ${err}`);
+      const text = await response.text();
+      throw new Error(`Luma API error ${response.status}: ${text}`);
     }
 
-    const data = (await response.json()) as { id: string; state: string };
-    return { providerJobId: data.id, status: "queued" };
+    const data = (await response.json()) as LumaCreateResponse;
+    return {
+      providerJobId: data.id,
+      status: "queued",
+      progressMessage: "Luma Dream Machine queued",
+    };
   },
 
   async getStatus(jobId: string): Promise<GenerationStatusResult> {
     const apiKey = process.env.LUMA_API_KEY;
     if (!apiKey) throw new Error("LUMA_API_KEY not set");
 
-    const response = await fetch(
-      `${API_BASE}/generations/${jobId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
+    const response = await fetch(`${API_BASE}/generations/${jobId}`, {
+      headers: lumaHeaders(apiKey),
+    });
 
     if (!response.ok) {
-      return { status: "failed", errorMessage: "Failed to fetch Luma status" };
-    }
-
-    const data = (await response.json()) as {
-      state: string;
-      assets?: { video?: string };
-      failure_reason?: string;
-    };
-
-    if (data.state === "completed") {
-      return { status: "completed", videoUrl: data.assets?.video };
-    } else if (data.state === "failed") {
       return {
         status: "failed",
-        errorMessage: data.failure_reason ?? "Luma generation failed",
+        errorMessage: `Luma status fetch failed (${response.status})`,
       };
     }
-    return { status: "processing", progressMessage: "Luma is dreaming" };
+
+    const data = (await response.json()) as LumaGeneration;
+
+    switch (data.state) {
+      case "completed":
+        return {
+          status: "completed",
+          videoUrl: data.assets?.video,
+          thumbnailUrl: data.assets?.image,
+        };
+
+      case "failed":
+        return {
+          status: "failed",
+          errorMessage: data.failure_reason ?? "Luma Dream Machine generation failed",
+        };
+
+      case "dreaming":
+        return {
+          status: "processing",
+          progressMessage: "Luma Dream Machine is dreaming up your video",
+        };
+
+      default: // queued
+        return { status: "queued", progressMessage: "Waiting in Luma queue" };
+    }
   },
 };

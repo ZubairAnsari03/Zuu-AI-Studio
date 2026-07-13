@@ -1,71 +1,112 @@
-import { useState } from "react";
-import { useListCharacters, useDeleteCharacter, useCreateCharacter } from "@workspace/api-client-react";
-import { Loader2, Plus, Users, Trash2, Edit, Save, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useMemo } from "react";
+import { useListCharacters, useCreateCharacter, useDeleteCharacter } from "@workspace/api-client-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Users, Plus, Trash2, Search, Save, Loader2, Send,
+} from "lucide-react";
+import { useLocation } from "wouter";
+
+// ── Schema ───────────────────────────────────────────────────────────────────
 
 const charSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  gender: z.string().optional(),
-  age: z.string().optional(),
-  faceDescription: z.string().optional(),
-  hair: z.string().optional(),
-  clothes: z.string().optional(),
-  bodyType: z.string().optional(),
-  personality: z.string().optional(),
-  consistencyNotes: z.string().optional(),
+  name:              z.string().min(1, "Name required"),
+  age:               z.string().optional(),
+  gender:            z.string().optional(),
+  bodyType:          z.string().optional(),
+  faceDescription:   z.string().optional(),
+  hair:              z.string().optional(),
+  clothes:           z.string().optional(),
+  consistencyNotes:  z.string().optional(),
 });
+
+type CharForm = z.infer<typeof charSchema>;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function buildConsistencyPrompt(char: CharForm): string {
+  const parts: string[] = [];
+  if (char.gender)          parts.push(char.gender);
+  if (char.age)             parts.push(`age ${char.age}`);
+  if (char.bodyType)        parts.push(char.bodyType);
+  if (char.faceDescription) parts.push(char.faceDescription);
+  if (char.hair)            parts.push(`hair: ${char.hair}`);
+  if (char.clothes)         parts.push(`wearing ${char.clothes}`);
+  if (char.consistencyNotes) parts.push(char.consistencyNotes);
+  return parts.join(", ");
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function CharactersPage() {
   const { data, isLoading, refetch } = useListCharacters();
-  const deleteMutation = useDeleteCharacter();
   const createMutation = useCreateCharacter();
+  const deleteMutation = useDeleteCharacter();
   const { toast } = useToast();
-  const [isOpen, setIsOpen] = useState(false);
+  const [, setLocation] = useLocation();
 
-  const form = useForm<z.infer<typeof charSchema>>({
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const form = useForm<CharForm>({
     resolver: zodResolver(charSchema),
-    defaultValues: {
-      name: "",
-      gender: "",
-      age: "",
-      faceDescription: "",
-      hair: "",
-      clothes: "",
-      bodyType: "",
-      personality: "",
-      consistencyNotes: "",
-    }
+    defaultValues: { name: "", age: "", gender: "", bodyType: "", faceDescription: "", hair: "", clothes: "", consistencyNotes: "" },
   });
 
-  const onSubmit = (values: z.infer<typeof charSchema>) => {
-    createMutation.mutate({ data: values }, {
-      onSuccess: () => {
-        toast({ title: "Character profile saved" });
-        setIsOpen(false);
-        form.reset();
-        refetch();
-      }
-    });
+  const characters = data ?? [];
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    if (!q) return characters;
+    return characters.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.faceDescription ?? "").toLowerCase().includes(q) ||
+        (c.hair ?? "").toLowerCase().includes(q) ||
+        (c.clothes ?? "").toLowerCase().includes(q),
+    );
+  }, [characters, search]);
+
+  const onSubmit = (values: CharForm) => {
+    createMutation.mutate(
+      { data: values },
+      {
+        onSuccess: () => {
+          toast({ title: "Character saved" });
+          form.reset();
+          setIsOpen(false);
+          refetch();
+        },
+        onError: () => toast({ variant: "destructive", title: "Failed to create character" }),
+      },
+    );
   };
 
   const handleDelete = (id: number) => {
-    if (confirm("Delete this character profile?")) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: "Character deleted" });
-          refetch();
-        }
-      });
-    }
+    if (!confirm("Delete this character profile?")) return;
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => { toast({ title: "Character deleted" }); refetch(); },
+    });
+  };
+
+  /** Inject this character's description into Studio prompt via localStorage. */
+  const sendToStudio = (char: typeof characters[0]) => {
+    const prompt = buildConsistencyPrompt(char as unknown as CharForm);
+    localStorage.setItem("zuu_studio_prefill", JSON.stringify({
+      prompt: `A scene featuring ${char.name}: ${prompt}`,
+      characterProfileId: char.id,
+    }));
+    toast({ title: `${char.name} loaded into Studio` });
+    setLocation("/studio");
   };
 
   if (isLoading) {
@@ -76,60 +117,77 @@ export default function CharactersPage() {
     );
   }
 
-  const characters = data || [];
-
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Characters</h1>
-          <p className="text-slate-400 mt-1">Maintain consistency across scenes</p>
+          <h1 className="text-3xl font-bold">Character Library</h1>
+          <p className="text-slate-400 mt-1">
+            Save character profiles for consistent faces and styles across generations.
+          </p>
         </div>
-        
+
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-6 glow-button">
-              <Plus size={18} className="mr-2" /> Create Profile
+            <Button className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-6 gap-2 glow-button shrink-0">
+              <Plus size={16} /> New Character
             </Button>
           </DialogTrigger>
           <DialogContent className="bg-[#080b14] border-white/10 text-white max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold">New Character Profile</DialogTitle>
+              <DialogTitle>Create Character Profile</DialogTitle>
             </DialogHeader>
+
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormField control={form.control} name="name" render={({ field }) => (
-                    <FormItem><FormLabel>Name / ID</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                  )} />
-                  <FormField control={form.control} name="age" render={({ field }) => (
-                    <FormItem><FormLabel>Age / Apparent Age</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                  )} />
-                  <FormField control={form.control} name="gender" render={({ field }) => (
-                    <FormItem><FormLabel>Gender / Presentation</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                  )} />
-                  <FormField control={form.control} name="bodyType" render={({ field }) => (
-                    <FormItem><FormLabel>Body Type</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                  )} />
+                  {[
+                    { name: "name",     label: "Name / Identifier" },
+                    { name: "age",      label: "Age / Apparent Age" },
+                    { name: "gender",   label: "Gender / Presentation" },
+                    { name: "bodyType", label: "Body Type" },
+                  ].map(({ name, label }) => (
+                    <FormField key={name} control={form.control} name={name as keyof CharForm} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-slate-400 text-xs uppercase tracking-wider">{label}</FormLabel>
+                        <FormControl>
+                          <Input className="bg-[#050508] border-white/10 h-9" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  ))}
                 </div>
-                
-                <FormField control={form.control} name="faceDescription" render={({ field }) => (
-                  <FormItem><FormLabel>Facial Features (be highly descriptive)</FormLabel><FormControl><Textarea className="bg-[#050508] border-white/10 h-20" {...field} /></FormControl><FormMessage/></FormItem>
-                )} />
-                <FormField control={form.control} name="hair" render={({ field }) => (
-                  <FormItem><FormLabel>Hair Style & Color</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                )} />
-                <FormField control={form.control} name="clothes" render={({ field }) => (
-                  <FormItem><FormLabel>Default Outfit / Style</FormLabel><FormControl><Input className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                )} />
-                <FormField control={form.control} name="consistencyNotes" render={({ field }) => (
-                  <FormItem><FormLabel>Keywords for AI Consistency</FormLabel><FormControl><Textarea placeholder="e.g. detailed green eyes, sharp jawline, cinematic lighting" className="bg-[#050508] border-white/10" {...field} /></FormControl><FormMessage/></FormItem>
-                )} />
-                
-                <div className="flex justify-end gap-3 pt-6 border-t border-white/10 mt-6">
-                  <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-white/20">Cancel</Button>
-                  <Button type="submit" disabled={createMutation.isPending} className="bg-purple-600 hover:bg-purple-700 text-white">
-                    {createMutation.isPending ? <Loader2 size={16} className="animate-spin mr-2"/> : <Save size={16} className="mr-2" />} Save Profile
+
+                {[
+                  { name: "faceDescription", label: "Facial Features (be highly descriptive)", placeholder: "Sharp jawline, deep-set blue eyes, freckled skin, high cheekbones…" },
+                  { name: "hair",            label: "Hair Style & Color",                       placeholder: "Wavy auburn hair, shoulder-length, slight curl at ends…" },
+                  { name: "clothes",         label: "Default Outfit / Style",                   placeholder: "Black tactical jacket, cargo pants, worn leather boots…" },
+                  { name: "consistencyNotes",label: "AI Consistency Keywords",                  placeholder: "e.g. cinematic lighting, photorealistic, hyper-detailed features" },
+                ].map(({ name, label, placeholder }) => (
+                  <FormField key={name} control={form.control} name={name as keyof CharForm} render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-slate-400 text-xs uppercase tracking-wider">{label}</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder={placeholder}
+                          className="bg-[#050508] border-white/10 min-h-[72px] resize-none text-sm placeholder:text-slate-600"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                ))}
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                  <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-white/20">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createMutation.isPending} className="bg-purple-600 hover:bg-purple-700 text-white gap-2">
+                    {createMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                    Save Character
                   </Button>
                 </div>
               </form>
@@ -138,46 +196,88 @@ export default function CharactersPage() {
         </Dialog>
       </div>
 
-      {characters.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {characters.map(char => (
-            <div key={char.id} className="glass-card p-6 rounded-3xl relative group overflow-hidden border border-white/5 hover:border-purple-500/30 transition-all">
-              <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                <Button size="icon" variant="ghost" className="h-8 w-8 bg-white/10 hover:bg-pink-500/20 hover:text-pink-400 text-slate-300" onClick={() => handleDelete(char.id)}>
-                  <Trash2 size={14} />
-                </Button>
-              </div>
-              
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-900/50 to-pink-900/50 border border-purple-500/30 flex items-center justify-center overflow-hidden">
+      {/* Search */}
+      {characters.length > 3 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
+          <Input
+            placeholder="Search characters…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 bg-[#050508] border-white/10 h-9"
+          />
+        </div>
+      )}
+
+      {/* Grid */}
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map((char) => (
+            <div
+              key={char.id}
+              className="glass-card p-5 rounded-2xl flex flex-col border border-white/5 hover:border-purple-500/25 transition-all group"
+            >
+              {/* Avatar + name */}
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-900/60 to-pink-900/60 border border-purple-500/20 flex items-center justify-center overflow-hidden shrink-0">
                   {char.referenceImageUrl ? (
                     <img src={char.referenceImageUrl} alt={char.name} className="w-full h-full object-cover" />
                   ) : (
-                    <Users className="text-purple-400" size={28} />
+                    <span className="text-2xl font-bold text-purple-300">
+                      {char.name.charAt(0).toUpperCase()}
+                    </span>
                   )}
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold">{char.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-bold truncate">{char.name}</h3>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {char.age && <span className="text-[10px] uppercase bg-white/5 px-2 py-0.5 rounded text-slate-400">{char.age}</span>}
-                    {char.gender && <span className="text-[10px] uppercase bg-white/5 px-2 py-0.5 rounded text-slate-400">{char.gender}</span>}
+                    {char.age    && <span className="text-[9px] uppercase bg-white/5 px-2 py-0.5 rounded text-slate-400 font-medium">{char.age}</span>}
+                    {char.gender && <span className="text-[9px] uppercase bg-white/5 px-2 py-0.5 rounded text-slate-400 font-medium">{char.gender}</span>}
                   </div>
                 </div>
               </div>
-              
-              <div className="space-y-3 text-sm">
+
+              {/* Details */}
+              <div className="space-y-2.5 text-sm flex-1">
                 {char.faceDescription && (
                   <div>
-                    <span className="text-slate-500 text-xs uppercase font-bold tracking-wider block mb-1">Face</span>
-                    <p className="text-slate-300 line-clamp-2">{char.faceDescription}</p>
+                    <span className="text-[9px] uppercase font-bold text-slate-600 tracking-wider block mb-0.5">Face</span>
+                    <p className="text-slate-300 text-xs line-clamp-2 leading-relaxed">{char.faceDescription}</p>
                   </div>
                 )}
                 {(char.hair || char.clothes) && (
                   <div>
-                    <span className="text-slate-500 text-xs uppercase font-bold tracking-wider block mb-1">Look</span>
-                    <p className="text-slate-300 line-clamp-1">{char.hair}{char.hair && char.clothes ? ' • ' : ''}{char.clothes}</p>
+                    <span className="text-[9px] uppercase font-bold text-slate-600 tracking-wider block mb-0.5">Look</span>
+                    <p className="text-slate-300 text-xs line-clamp-1">
+                      {[char.hair, char.clothes].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                 )}
+                {char.consistencyNotes && (
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-slate-600 tracking-wider block mb-0.5">Keywords</span>
+                    <p className="text-slate-500 text-xs line-clamp-1 font-mono">{char.consistencyNotes}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-slate-500 hover:text-pink-400 hover:bg-pink-500/10 h-8 gap-1.5 text-xs"
+                  onClick={() => handleDelete(char.id)}
+                >
+                  <Trash2 size={13} /> Delete
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-purple-600/80 hover:bg-purple-600 text-white h-8 gap-1.5 text-xs"
+                  onClick={() => sendToStudio(char)}
+                >
+                  <Send size={13} /> Use in Studio
+                </Button>
               </div>
             </div>
           ))}
@@ -185,15 +285,25 @@ export default function CharactersPage() {
       ) : (
         <div className="glass-card p-16 rounded-3xl text-center border-dashed border-2 border-white/10 bg-transparent flex flex-col items-center">
           <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6">
-            <Users className="text-slate-500" size={32} />
+            <Users className="text-slate-600" size={32} />
           </div>
-          <h3 className="text-2xl font-bold mb-3">No Characters</h3>
-          <p className="text-slate-400 mb-8 max-w-md">
-            Create character profiles to maintain consistent faces, clothing, and styles across different video generations.
+          <h3 className="text-2xl font-bold mb-3">
+            {search ? "No characters found" : "Character Library Empty"}
+          </h3>
+          <p className="text-slate-400 mb-8 max-w-md text-sm">
+            {search
+              ? "No characters match your search. Try different keywords."
+              : "Create character profiles to maintain consistent faces, styles, and outfits across all your video generations."}
           </p>
-          <Button onClick={() => setIsOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-8 glow-button">
-            Create First Character
-          </Button>
+          {search ? (
+            <Button variant="outline" className="border-white/20" onClick={() => setSearch("")}>
+              Clear Search
+            </Button>
+          ) : (
+            <Button onClick={() => setIsOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-white rounded-full px-8 glow-button gap-2">
+              <Plus size={16} /> Create First Character
+            </Button>
+          )}
         </div>
       )}
     </div>

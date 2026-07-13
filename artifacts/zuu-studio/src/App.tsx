@@ -7,62 +7,70 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Loader2 } from "lucide-react";
 
+// Non-lazy: small pages always needed immediately
 import LandingPage from "@/pages/LandingPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
-const NotFoundPage = lazy(() => import("@/pages/not-found"));
 
-// Lazy load protected pages
-const StudioPage = lazy(() => import("@/pages/StudioPage"));
-const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
-const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
+// Lazy: all protected pages — each becomes its own chunk
+const NotFoundPage   = lazy(() => import("@/pages/not-found"));
+const StudioPage     = lazy(() => import("@/pages/StudioPage"));
+const DashboardPage  = lazy(() => import("@/pages/DashboardPage"));
+const HistoryPage    = lazy(() => import("@/pages/HistoryPage"));
 const CharactersPage = lazy(() => import("@/pages/CharactersPage"));
-const PromptsPage = lazy(() => import("@/pages/PromptsPage"));
-const CreditsPage = lazy(() => import("@/pages/CreditsPage"));
-const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
-const AdminPage = lazy(() => import("@/pages/AdminPage"));
+const PromptsPage    = lazy(() => import("@/pages/PromptsPage"));
+const TemplatesPage  = lazy(() => import("@/pages/TemplatesPage"));
+const StoryboardPage = lazy(() => import("@/pages/StoryboardPage"));
+const CreditsPage    = lazy(() => import("@/pages/CreditsPage"));
+const SettingsPage   = lazy(() => import("@/pages/SettingsPage"));
+const AdminPage      = lazy(() => import("@/pages/AdminPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 30_000,
     },
   },
 });
 
-function ProtectedRoute({ component: Component, requireAdmin = false }: { component: any, requireAdmin?: boolean }) {
+const PageLoader = () => (
+  <div className="h-full w-full flex items-center justify-center">
+    <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
+  </div>
+);
+
+const FullScreenLoader = () => (
+  <div className="h-screen w-full flex items-center justify-center bg-[#050508]">
+    <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
+  </div>
+);
+
+function ProtectedRoute({
+  component: Component,
+  requireAdmin = false,
+}: {
+  component: React.ComponentType;
+  requireAdmin?: boolean;
+}) {
   const { user, isLoading } = useAuth();
   const [, setLocation] = useLocation();
 
   // Navigate in an effect — never call setLocation during render
   useEffect(() => {
     if (isLoading) return;
-    if (!user) {
-      setLocation("/login");
-    } else if (requireAdmin && user.role !== "admin") {
-      setLocation("/dashboard");
-    }
+    if (!user) setLocation("/login");
+    else if (requireAdmin && user.role !== "admin") setLocation("/dashboard");
   }, [isLoading, user, requireAdmin, setLocation]);
 
-  if (isLoading) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#050508] text-purple-500">
-        <Loader2 className="h-10 w-10 animate-spin" />
-      </div>
-    );
-  }
-
+  if (isLoading) return <FullScreenLoader />;
   if (!user) return null;
   if (requireAdmin && user.role !== "admin") return null;
 
   return (
     <DashboardLayout>
-      <Suspense fallback={
-        <div className="h-full w-full flex items-center justify-center">
-          <Loader2 className="h-10 w-10 animate-spin text-purple-500" />
-        </div>
-      }>
+      <Suspense fallback={<PageLoader />}>
         <Component />
       </Suspense>
     </DashboardLayout>
@@ -72,15 +80,15 @@ function ProtectedRoute({ component: Component, requireAdmin = false }: { compon
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
-      
-      <Route path="/studio">
-        <ProtectedRoute component={StudioPage} />
-      </Route>
+      <Route path="/"          component={LandingPage} />
+      <Route path="/login"     component={LoginPage} />
+      <Route path="/register"  component={RegisterPage} />
+
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
+      </Route>
+      <Route path="/studio">
+        <ProtectedRoute component={StudioPage} />
       </Route>
       <Route path="/history">
         <ProtectedRoute component={HistoryPage} />
@@ -91,6 +99,12 @@ function Router() {
       <Route path="/prompts">
         <ProtectedRoute component={PromptsPage} />
       </Route>
+      <Route path="/templates">
+        <ProtectedRoute component={TemplatesPage} />
+      </Route>
+      <Route path="/storyboard">
+        <ProtectedRoute component={StoryboardPage} />
+      </Route>
       <Route path="/credits">
         <ProtectedRoute component={CreditsPage} />
       </Route>
@@ -98,15 +112,19 @@ function Router() {
         <ProtectedRoute component={SettingsPage} />
       </Route>
       <Route path="/admin">
-        <ProtectedRoute component={AdminPage} requireAdmin={true} />
+        <ProtectedRoute component={AdminPage} requireAdmin />
       </Route>
 
-      <Route component={NotFoundPage} />
+      <Route>
+        <Suspense fallback={<FullScreenLoader />}>
+          <NotFoundPage />
+        </Suspense>
+      </Route>
     </Switch>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -120,5 +138,3 @@ function App() {
     </QueryClientProvider>
   );
 }
-
-export default App;
