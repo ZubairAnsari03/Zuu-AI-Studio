@@ -4,6 +4,7 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant light (&:is(.light *));
 
 @theme inline {
   --color-background: hsl(var(--background));
@@ -61,49 +62,50 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-:root {
+/* ── Dark theme (default) ──────────────────────────────────────────────── */
+:root,
+html.dark {
   --button-outline: rgba(255, 255, 255, 0.1);
   --badge-outline: rgba(255, 255, 255, 0.05);
   --opaque-button-border-intensity: 9;
   --elevate-1: rgba(255, 255, 255, 0.04);
   --elevate-2: rgba(255, 255, 255, 0.09);
 
-  /* Force dark mode colors always */
-  --background: 240 23% 3%; /* #050508 */
-  --foreground: 0 0% 100%;
-  --border: 240 20% 12%;
-  --card: 226 43% 6%; /* #080b14 */
-  --card-foreground: 0 0% 100%;
-  --card-border: 262 83% 58% / 0.2; /* Subtle purple glow border */
-  
-  --sidebar: 240 23% 4%;
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 240 20% 12%;
-  --sidebar-primary: 262 83% 58%;
+  --background:        240 23% 3%;
+  --foreground:        0 0% 100%;
+  --border:            240 20% 12%;
+  --card:              226 43% 6%;
+  --card-foreground:   0 0% 100%;
+  --card-border:       262 83% 58% / 0.2;
+
+  --sidebar:           240 23% 4%;
+  --sidebar-foreground:240 10% 90%;
+  --sidebar-border:    240 20% 10%;
+  --sidebar-primary:   262 83% 58%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 23% 8%;
-  --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-ring: 262 83% 58%;
+  --sidebar-accent:    240 23% 8%;
+  --sidebar-accent-foreground:  0 0% 100%;
+  --sidebar-ring:      262 83% 58%;
 
-  --popover: 226 43% 6%;
-  --popover-foreground: 0 0% 100%;
-  --popover-border: 240 20% 12%;
+  --popover:           226 43% 6%;
+  --popover-foreground:0 0% 100%;
+  --popover-border:    240 20% 12%;
 
-  --primary: 262 83% 58%; /* Purple */
-  --primary-foreground: 0 0% 100%;
-  --secondary: 217 91% 60%; /* Blue */
+  --primary:           262 83% 58%;
+  --primary-foreground:0 0% 100%;
+  --secondary:         217 91% 60%;
   --secondary-foreground: 0 0% 100%;
 
-  --muted: 240 20% 10%;
-  --muted-foreground: 215 20% 65%; /* slate-300 */
-  --accent: 326 79% 60%; /* Pink #ec4899 */
+  --muted:             240 20% 10%;
+  --muted-foreground:  215 20% 65%;
+  --accent:            326 79% 60%;
   --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 84% 60%;
+  --destructive:       0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 240 20% 15%;
-  --ring: 262 83% 58%;
+  --input:             240 20% 15%;
+  --ring:              262 83% 58%;
 
   --app-font-sans: 'Inter', sans-serif;
   --app-font-serif: Georgia, serif;
@@ -111,16 +113,85 @@
   --radius: 0.75rem;
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
-  --sidebar-accent-border: hsl(var(--sidebar-accent));
-  --primary-border: hsl(var(--primary));
-  --secondary-border: hsl(var(--secondary));
-  --muted-border: hsl(var(--muted));
-  --accent-border: hsl(var(--accent));
-  --destructive-border: hsl(var(--destructive));
+  --sidebar-accent-border:  hsl(var(--sidebar-accent));
+  --primary-border:    hsl(var(--primary));
+  --secondary-border:  hsl(var(--secondary));
+  --muted-border:      hsl(var(--muted));
+  --accent-border:     hsl(var(--accent));
+  --destructive-border:hsl(var(--destructive));
+
+  /* App-specific surface tokens */
+  --surface-base:      #050508;
+  --surface-raised:    #080b14;
+  --surface-overlay:   #0d1220;
+  --glass-bg:          rgba(255,255,255,0.04);
+  --glass-border:      rgba(124,58,237,0.2);
+  --text-primary:      #ffffff;
+  --text-secondary:    #94a3b8;
+  --text-muted:        #4b5563;
 }
 
-.dark {
-  /* Keep same as root since we are dark-only */
+/* ── Light theme ────────────────────────────────────────────────────────── */
+html.light {
+  --button-outline: rgba(0, 0, 0, 0.08);
+  --badge-outline:  rgba(0, 0, 0, 0.04);
+  --opaque-button-border-intensity: 12;
+  --elevate-1: rgba(0, 0, 0, 0.04);
+  --elevate-2: rgba(0, 0, 0, 0.07);
+
+  --background:        0 0% 97%;
+  --foreground:        240 10% 8%;
+  --border:            240 10% 88%;
+  --card:              0 0% 100%;
+  --card-foreground:   240 10% 8%;
+  --card-border:       262 60% 60% / 0.15;
+
+  --sidebar:           0 0% 100%;
+  --sidebar-foreground:240 10% 15%;
+  --sidebar-border:    240 10% 90%;
+  --sidebar-primary:   262 75% 55%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent:    240 10% 95%;
+  --sidebar-accent-foreground:  240 10% 15%;
+  --sidebar-ring:      262 75% 55%;
+
+  --popover:           0 0% 100%;
+  --popover-foreground:240 10% 8%;
+  --popover-border:    240 10% 88%;
+
+  --primary:           262 75% 55%;
+  --primary-foreground:0 0% 100%;
+  --secondary:         217 85% 55%;
+  --secondary-foreground: 0 0% 100%;
+
+  --muted:             240 10% 93%;
+  --muted-foreground:  240 6% 45%;
+  --accent:            326 72% 55%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive:       0 78% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  --input:             240 10% 90%;
+  --ring:              262 75% 55%;
+
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-accent-border:  hsl(var(--sidebar-accent));
+  --primary-border:    hsl(var(--primary));
+  --secondary-border:  hsl(var(--secondary));
+  --muted-border:      hsl(var(--muted));
+  --accent-border:     hsl(var(--accent));
+  --destructive-border:hsl(var(--destructive));
+
+  /* App-specific surface tokens */
+  --surface-base:      #f5f5f7;
+  --surface-raised:    #ffffff;
+  --surface-overlay:   #f0f0f5;
+  --glass-bg:          rgba(0,0,0,0.02);
+  --glass-border:      rgba(124,58,237,0.15);
+  --text-primary:      #0f0f14;
+  --text-secondary:    #4b5563;
+  --text-muted:        #9ca3af;
 }
 
 @layer base {
@@ -130,25 +201,40 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background-color: var(--surface-base);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
 @layer utilities {
   .glass-card {
-    @apply bg-white/5 backdrop-blur-md border border-purple-500/20 shadow-[0_0_15px_rgba(124,58,237,0.1)];
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 15px rgba(124,58,237,0.06);
   }
-  
+
+  .surface-base  { background-color: var(--surface-base); }
+  .surface-raised { background-color: var(--surface-raised); }
+  .surface-overlay { background-color: var(--surface-overlay); }
+
   .text-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-pink-500;
   }
-  
+
   .text-gradient-blue {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-blue-500;
   }
-  
+
   .glow-button {
     @apply relative overflow-hidden transition-all duration-300 hover:shadow-[0_0_20px_rgba(168,85,247,0.4)];
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 
   input[type='search']::-webkit-search-cancel-button {
     @apply hidden;
@@ -158,5 +244,10 @@
     content: attr(data-placeholder);
     color: hsl(var(--muted-foreground));
     pointer-events: none;
+  }
+
+  @keyframes shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
   }
 }

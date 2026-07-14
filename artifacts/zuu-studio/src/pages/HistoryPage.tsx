@@ -1,5 +1,12 @@
-import { useState, useCallback } from "react";
-import { useListVideos, useToggleFavourite, useDeleteVideo, useRegenerateVideo } from "@workspace/api-client-react";
+import { useState, useCallback, useEffect } from "react";
+import {
+  useListVideos,
+  useToggleFavourite,
+  useDeleteVideo,
+  useRegenerateVideo,
+  getVideoStatus,
+} from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, Search, Filter, Play, Heart, Trash2, MoreVertical, RefreshCw, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useToast } from "@/hooks/use-toast";
 import VideoPlayerModal, { type VideoEntry } from "@/components/studio/VideoPlayerModal";
 
+
 const STATUS_BADGE: Record<string, string> = {
   completed:  "bg-green-500/20 text-green-400 border-green-500/30",
   processing: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -15,6 +23,36 @@ const STATUS_BADGE: Record<string, string> = {
   failed:     "bg-pink-500/20 text-pink-400 border-pink-500/30",
   cancelled:  "bg-slate-500/20 text-slate-400 border-slate-500/30",
 };
+
+function VideoStatusPoller({
+  id,
+  active,
+  onUpdated,
+}: {
+  id: number;
+  active: boolean;
+  onUpdated: () => void;
+}) {
+  const { data } = useQuery({
+  queryKey: ["video-status", id],
+  queryFn: () => getVideoStatus(id),
+  enabled: active,
+  refetchInterval: active ? 5000 : false,
+  refetchIntervalInBackground: true,
+});
+
+  useEffect(() => {
+    if (
+      data?.status === "completed" ||
+      data?.status === "failed" ||
+      data?.status === "cancelled"
+    ) {
+      onUpdated();
+    }
+  }, [data?.status, onUpdated]);
+
+  return null;
+}
 
 export default function HistoryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
@@ -26,6 +64,19 @@ export default function HistoryPage() {
     limit: 60,
     status: statusFilter !== "all" ? statusFilter : undefined,
   });
+  const hasActiveVideos = (data?.items ?? []).some(
+  (video) => video.status === "queued" || video.status === "processing",
+);
+
+useEffect(() => {
+  if (!hasActiveVideos) return;
+
+  const timer = window.setInterval(() => {
+    refetch();
+  }, 5000);
+
+  return () => window.clearInterval(timer);
+}, [hasActiveVideos, refetch]);
 
   const toggleFavMutation   = useToggleFavourite();
   const deleteMutation      = useDeleteVideo();
@@ -36,11 +87,29 @@ export default function HistoryPage() {
   }, [toggleFavMutation, refetch]);
 
   const handleDelete = useCallback((id: number) => {
-    if (!confirm("Delete this video generation?")) return;
-    deleteMutation.mutate({ id }, {
-      onSuccess: () => { toast({ title: "Deleted" }); refetch(); },
-    });
-  }, [deleteMutation, refetch, toast]);
+  if (!window.confirm("Delete this video generation?")) return;
+
+  deleteMutation.mutate(
+    { id },
+    {
+      onSuccess: async () => {
+        if (activeVideo?.id === id) {
+          setActiveVideo(null);
+        }
+
+        await refetch();
+        toast({ title: "Deleted successfully" });
+      },
+      onError: (err: any) => {
+        toast({
+          variant: "destructive",
+          title: "Delete failed",
+          description: err?.message ?? "The video could not be deleted.",
+        });
+      },
+    },
+  );
+}, [deleteMutation, refetch, toast, activeVideo]);
 
   const handleRegenerate = useCallback((id: number) => {
     regenerateMutation.mutate({ id }, {
@@ -102,6 +171,14 @@ export default function HistoryPage() {
 
       {videos.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {videos.map((video) => (
+  <VideoStatusPoller
+    key={`poll-${video.id}`}
+    id={video.id}
+    active={video.status === "queued" || video.status === "processing"}
+    onUpdated={refetch}
+  />
+))}
           {videos.map((video) => (
             <div
               key={video.id}
